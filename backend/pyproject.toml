@@ -1,0 +1,70 @@
+[project]
+name = "copilot-metrics"
+# Placeholder: releases are versioned by their git tag (see README "Releasing").
+version = "0.0.0"
+description = "Copilot usage dashboard: API and sync worker"
+readme = "README.md"
+authors = [
+    { name = "InsaneDwayne", email = "88616118+InsaneDwayne@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "itsdangerous>=2.2.0",
+    "procrastinate>=3.10.0",
+    "psycopg[binary,pool]>=3.3.8",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    "pyjwt[crypto]>=2.15.1",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+copilot-metrics = "copilot_metrics.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.30,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+    "ruff>=0.17.4",
+]
+screenshots = [
+    "pillow>=13.0.0",
+    "playwright>=1.64.1",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S", "PT"]
+ignore = ["S101", "RUF001", "RUF002", "RUF003", "RUF012"]  # RUF012: pydantic copies mutable defaults
+
+[tool.ruff.lint.per-file-ignores]
+"migrations/**" = ["S608", "E501"]
+"tests/**" = ["S105", "S106"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["procrastinate.*"]
+follow_untyped_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]

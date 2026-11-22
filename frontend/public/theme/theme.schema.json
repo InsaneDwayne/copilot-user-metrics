@@ -1,0 +1,551 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "appName": {
+      "default": "Copilot Usage",
+      "description": "Shown in the header and the browser tab.",
+      "type": "string",
+      "minLength": 1
+    },
+    "showAppName": {
+      "default": true,
+      "description": "Show `appName` next to the logo. Turn off when the logo already contains the name.",
+      "type": "boolean"
+    },
+    "logoUrl": {
+      "default": null,
+      "description": "Logo for the header, e.g. `logo.svg` in the theme folder. Shown as is, at the header height.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "logoUrlDark": {
+      "default": null,
+      "description": "Logo for dark mode, when it differs from `logoUrl`.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "faviconUrl": {
+      "default": null,
+      "description": "Browser-tab icon, e.g. `favicon.svg`. Keeps the built-in icon when null.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "font": {
+      "default": "Inter",
+      "description": "Font family for all text.",
+      "type": "string",
+      "minLength": 1
+    },
+    "fontStylesheetUrl": {
+      "default": null,
+      "description": "Stylesheet that loads `font`: a web-font URL, or e.g. `fonts.css` with @font-face rules.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stylesheetUrl": {
+      "default": null,
+      "description": "Extra stylesheet loaded after the theme, e.g. `theme.css`, for anything theme.json does not cover. Override tokens there as `--color-<name>` (`:root[data-theme=\"light\"]` for one mode).",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "defaultMode": {
+      "default": "system",
+      "description": "The mode users see until they pick one with the header toggle. `system` follows the OS setting.",
+      "type": "string",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ]
+    },
+    "colors": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "accent": {
+          "default": "#9184d9",
+          "description": "The brand colour, shared by both modes.",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "tokens": {
+          "default": {},
+          "description": "Restyle individual roles (muted text, lines, tags, chart series, ...). A value is a #rrggbb colour or a palette token such as `accent-300` (ramp steps keep their contrast role in both modes).",
+          "type": "object",
+          "properties": {
+            "fg-soft": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "fg-muted": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "fg-subtle": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "line": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "line-strong": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "well": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "tint": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "on-tint": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chip": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "on-chip": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "notice": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "on-notice": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "notice-line": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "warning": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "error": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "meter": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "meter-track": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-1": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-2": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-3": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-4": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-5": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-6": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-7": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "series-8": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-line": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-included": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-billed": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-projection": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-grid": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-axis": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-label": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "chart-cursor": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "heat-1": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "heat-2": {
+              "$ref": "#/$defs/tokenValue"
+            },
+            "heat-3": {
+              "$ref": "#/$defs/tokenValue"
+            }
+          },
+          "additionalProperties": false
+        },
+        "dark": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "bg": {
+              "default": "#161826",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "text": {
+              "default": "#e9e9ed",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "surface": {
+              "description": "Card surface. Derived from `bg` when omitted.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "accent": {
+              "description": "This mode's accent, used exactly as given. When omitted, `colors.accent` is used, darkened or lightened just enough to stay readable on `bg` (4.5:1 contrast).",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "tokens": {
+              "default": {},
+              "description": "Role overrides for this mode only; they win over `colors.tokens`.",
+              "type": "object",
+              "properties": {
+                "fg-soft": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "fg-muted": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "fg-subtle": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "line-strong": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "well": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "tint": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-tint": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chip": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-chip": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "notice": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-notice": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "notice-line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "warning": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "error": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "meter": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "meter-track": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-1": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-2": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-3": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-4": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-5": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-6": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-7": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-8": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-included": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-billed": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-projection": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-grid": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-axis": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-label": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-cursor": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-1": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-2": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-3": {
+                  "$ref": "#/$defs/tokenValue"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "light": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "bg": {
+              "default": "#f4f5fa",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "text": {
+              "default": "#1b1d2a",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "surface": {
+              "description": "Card surface. Derived from `bg` when omitted.",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "accent": {
+              "description": "This mode's accent, used exactly as given. When omitted, `colors.accent` is used, darkened or lightened just enough to stay readable on `bg` (4.5:1 contrast).",
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "tokens": {
+              "default": {},
+              "description": "Role overrides for this mode only; they win over `colors.tokens`.",
+              "type": "object",
+              "properties": {
+                "fg-soft": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "fg-muted": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "fg-subtle": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "line-strong": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "well": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "tint": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-tint": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chip": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-chip": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "notice": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "on-notice": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "notice-line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "warning": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "error": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "meter": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "meter-track": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-1": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-2": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-3": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-4": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-5": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-6": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-7": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "series-8": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-line": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-included": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-billed": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-projection": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-grid": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-axis": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-label": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "chart-cursor": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-1": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-2": {
+                  "$ref": "#/$defs/tokenValue"
+                },
+                "heat-3": {
+                  "$ref": "#/$defs/tokenValue"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "$schema": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "tokenValue": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        {
+          "type": "string",
+          "enum": [
+            "canvas",
+            "surface",
+            "fg",
+            "accent",
+            "accent-100",
+            "accent-200",
+            "accent-300",
+            "accent-400",
+            "accent-500",
+            "accent-600",
+            "accent-700",
+            "accent-800",
+            "accent-900",
+            "neutral-100",
+            "neutral-200",
+            "neutral-300",
+            "neutral-400",
+            "neutral-500",
+            "neutral-600",
+            "neutral-700",
+            "neutral-800",
+            "neutral-900"
+          ]
+        }
+      ],
+      "description": "A #rrggbb colour, or a palette token such as `accent-300`."
+    }
+  }
+}

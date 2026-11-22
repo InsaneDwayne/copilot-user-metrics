@@ -1,0 +1,103 @@
+# Tests and the image build all run in containers built from the root Dockerfile:
+#   backend-test   ruff, mypy, pytest (unit + integration against Postgres 18)  -> ci/compose.yaml
+#   frontend-test  oxlint, prettier, tsc, vitest                                -> ci/compose.yaml
+#   image          the runtime image (BuildKit), smoke-tested (ci/smoke-test.sh), plus a check
+#                  of the deploy/ compose stack; not pushed anywhere
+# Release tags don't trigger this directly: release.yml calls it (workflow_call) and
+# only publishes the image if it passes.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.suite }}-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.suite }}-test
+          tags: copilot-usage-${{ matrix.suite }}-test:ci
+          load: true
+          cache-from: type=gha,scope=${{ matrix.suite }}-test
+          cache-to: type=gha,scope=${{ matrix.suite }}-test,mode=max
+
+      - name: Run tests in container
+        run: docker compose -f ci/compose.yaml run --rm ${{ matrix.suite }}-test
+
+      - name: Database logs
+        if: failure() && matrix.suite == 'backend'
+        run: docker compose -f ci/compose.yaml logs db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f ci/compose.yaml down -v
+
+  image:
+    name: image
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: app
+          tags: copilot-usage:ci
+          load: true
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,scope=app,mode=max
+
+      - name: Smoke test
+        run: ci/smoke-test.sh copilot-usage:ci
+
+      # The self-hosting stack (shipped with each release): valid, and pins the release image.
+      - name: Check the deploy stack
+        env:
+          APP_VERSION: "0.0.0"
+          POSTGRES_PASSWORD: ci
+          OWNER_DB_PASSWORD: ci
+          API_DB_PASSWORD: ci
+          WORKER_DB_PASSWORD: ci
+          GITHUB_ORG: ci
+          GITHUB_APP_ID: "1"
+          GITHUB_APP_CLIENT_ID: ci
+          GITHUB_APP_CLIENT_SECRET: ci
+          SESSION_SECRET: ci-placeholder-session-secret-0123456789
+        run: |
+          docker compose -f deploy/compose.yaml config -q
+          docker compose -f deploy/compose.yaml -f deploy/compose.build.yaml config -q
+          docker compose -f deploy/compose.worker-migrates.yaml config -q
+          docker compose -f deploy/compose.worker-migrates.yaml -f deploy/compose.worker-migrates.build.yaml config -q
+          docker compose -f deploy/compose.worker-migrates.yaml config --images | grep -qx 'ghcr.io/insanedwayne/copilot-user-metrics:0.0.0'
+          docker compose -f deploy/compose.yaml build -q db # the stacks' Postgres image
+          docker compose -f deploy/compose.yaml config --images | grep -qx 'ghcr.io/insanedwayne/copilot-user-metrics:0.0.0'
+          APP_VERSION= docker compose -f deploy/compose.yaml config --images | grep -qx 'ghcr.io/insanedwayne/copilot-user-metrics:latest'

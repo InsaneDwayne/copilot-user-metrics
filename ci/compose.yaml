@@ -1,0 +1,47 @@
+# Test stack used by CI (.github/workflows/ci.yml); runs the same way locally:
+#
+#   docker compose -f ci/compose.yaml run --rm --build backend-test
+#   docker compose -f ci/compose.yaml run --rm --build frontend-test
+#   docker compose -f ci/compose.yaml down -v
+#
+# Both test images come from the root Dockerfile. The database is throwaway (tmpfs)
+# and uses the dev container's init script, so it has the same roles and test database.
+name: copilot-usage-ci
+
+services:
+  backend-test:
+    image: copilot-usage-backend-test:ci
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: backend-test
+    environment:
+      TEST_DATABASE_URL: postgresql://copilot:copilot@db:5432/copilot_metrics_test
+      TEST_DATABASE_REQUIRED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend-test:
+    image: copilot-usage-frontend-test:ci
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: frontend-test
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: copilot_metrics
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - ../.devcontainer/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Over TCP: during init the entrypoint's temporary server only listens on the socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U copilot -d copilot_metrics_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

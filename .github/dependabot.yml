@@ -1,0 +1,56 @@
+# Weekly version updates for every place a dependency is pinned. Minor and patch bumps come
+# as one grouped PR per ecosystem, majors one PR each. A release must be a week old before it
+# is proposed (cooldown), so a hijacked release is usually pulled before it reaches a PR.
+# Security updates (enabled in the repository settings) skip the cooldown and the schedule.
+# Every PR runs CI (tests, image smoke test) and the dependency audit (audit.yml).
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /backend
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      backend:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      frontend:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*] # workflows and the local composite actions
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  # Base images in the root Dockerfile (node, python, uv) and the dev container's, including
+  # the Playwright image its Chromium comes from. That tag follows the `playwright` package
+  # (uv, above): both updates arrive the same Monday; merge both, then rebuild the dev container.
+  - package-ecosystem: docker
+    directories: [/, /.devcontainer]
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      images:
+        update-types: [minor, patch]
+
+  # postgres in the CI stack (the self-hosting stacks' app image follows APP_VERSION).
+  - package-ecosystem: docker-compose
+    directories: [/ci]
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      compose:
+        update-types: [minor, patch]
+
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
