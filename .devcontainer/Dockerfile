@@ -3,7 +3,7 @@
 # on some networks). The Python image, not the Node.js one (mcr.microsoft.com/playwright): the
 # two packages share version numbers but not always the Chromium build. Keep the tag at the
 # `playwright` version in backend/uv.lock; Dependabot proposes both updates. Only Chromium is kept.
-FROM mcr.microsoft.com/playwright/python:v1.65.1-noble AS playwright
+FROM mcr.microsoft.com/playwright/python:v1.65.2-noble AS playwright
 RUN rm -rf /ms-playwright/firefox-* /ms-playwright/webkit-*
 
 FROM mcr.microsoft.com/devcontainers/typescript-node:26-trixie
