@@ -1,0 +1,65 @@
+# Git hooks, run by pre-commit (https://pre-commit.com) on each commit. Installed by `just install`.
+# Run them on every file with `just check`; run the tests with `just test`.
+# Backend and frontend tools come from backend/.venv and frontend/node_modules,
+# so the hooks use exactly the versions in uv.lock and package-lock.json.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # ---------------------------------------------------------------- backend
+  - repo: local
+    hooks:
+      # --project (not --directory) keeps the repo root as cwd, so the paths pre-commit
+      # passes stay valid; ruff still finds backend/pyproject.toml from each file.
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --project backend ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^backend/
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --project backend ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^backend/
+      - id: mypy
+        name: mypy
+        entry: uv run --directory backend mypy src tests
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
+        files: ^backend/
+
+  # ---------------------------------------------------------------- frontend
+  - repo: local
+    hooks:
+      # Runs inside frontend/ so prettier finds its plugins and .prettierignore there;
+      # the repo-relative paths pre-commit passes are rewritten to match.
+      - id: prettier
+        name: prettier
+        entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --write --ignore-unknown --log-level warn "${@#frontend/}"' --
+        language: system
+        types: [text]
+        files: ^frontend/
+      - id: oxlint
+        name: oxlint
+        entry: npm --prefix frontend run --silent lint
+        language: system
+        pass_filenames: false
+        types_or: [ts, tsx]
+        files: ^frontend/
+      - id: tsc
+        name: tsc
+        entry: npm --prefix frontend run --silent typecheck
+        language: system
+        pass_filenames: false
+        types_or: [ts, tsx]
+        files: ^frontend/

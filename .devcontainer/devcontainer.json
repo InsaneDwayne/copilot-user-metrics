@@ -1,0 +1,65 @@
+{
+  "name": "copilot-user-metrics",
+  "dockerComposeFile": ["compose.yaml"],
+  "service": "app",
+  "runServices": ["app", "db"],
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "initializeCommand": "mkdir -p \"$HOME/.ssh\" && touch \"$HOME/.gitconfig\" \"$HOME/.gitconfig-github\"",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [5173, 8000],
+  "portsAttributes": {
+    "5173": { "label": "Frontend (Vite)" },
+    "8000": { "label": "API (FastAPI)" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.debugpy",
+        "oxc.oxc-vscode",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "EditorConfig.EditorConfig",
+        "nefrob.vscode-just-syntax",
+        "Anthropic.claude-code",
+        "cweijan.vscode-database-client2",
+        "cweijan.dbclient-jdbc"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/workspace/backend/.venv/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "[typescript][typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        },
+        "sqltools.connections": [
+          {
+            "name": "copilot_metrics (owner)",
+            "driver": "PostgreSQL",
+            "server": "db",
+            "port": 5432,
+            "database": "copilot_metrics",
+            "username": "copilot",
+            "password": "copilot"
+          }
+        ]
+      }
+    }
+  },
+
+  "remoteUser": "node"
+}

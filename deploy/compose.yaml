@@ -1,0 +1,126 @@
+# Example stack: Postgres, a one-shot migration container, the API (serves the dashboard)
+# and the sync worker. Setup: docs/deployment/docker-compose.md in the repository; upgrades,
+# backups, troubleshooting: docs/operations.md.
+name: copilot-usage
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: [/tmp]
+
+x-app: &app
+  <<: *hardened
+  image: ghcr.io/insanedwayne/copilot-user-metrics:${APP_VERSION:-latest}
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *hardened
+    # postgres:18 that sets up the app's login roles on every start.
+    build:
+      context: ./db
+      dockerfile_inline: |
+        FROM postgres:18
+        COPY --chmod=0755 entrypoint.sh /usr/local/bin/copilot-db-entrypoint.sh
+        COPY setup.sql /docker-entrypoint-initdb.d/setup.sql
+        ENTRYPOINT ["copilot-db-entrypoint.sh"]
+        CMD ["postgres"]
+    pull_policy: build
+    restart: unless-stopped
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    tmpfs: [/tmp, /run/postgresql]
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_DB: copilot_metrics
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD in .env}
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?set API_DB_PASSWORD in .env}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?set WORKER_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # TCP only accepts connections once the roles are set up.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U copilot -d copilot_metrics"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["copilot-metrics", "migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://copilot_owner:${OWNER_DB_PASSWORD}@db:5432/copilot_metrics
+
+  api:
+    <<: *app
+    command: ["copilot-metrics", "api", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8000}:8000"
+    environment:
+      - GITHUB_ORG=${GITHUB_ORG:?set GITHUB_ORG in .env}
+      - GITHUB_APP_CLIENT_ID=${GITHUB_APP_CLIENT_ID:?set GITHUB_APP_CLIENT_ID in .env}
+      - GITHUB_APP_CLIENT_SECRET=${GITHUB_APP_CLIENT_SECRET:?set GITHUB_APP_CLIENT_SECRET in .env}
+      - SESSION_SECRET=${SESSION_SECRET:?set SESSION_SECRET in .env}
+      - API_DATABASE_URL=postgresql://copilot_api:${API_DB_PASSWORD}@db:5432/copilot_metrics
+      - API_PUBLIC_URL=${PUBLIC_URL:-http://localhost:8000}
+      - API_ALLOW_HTTP=${ALLOW_HTTP:-false}
+      - API_STATIC_DIR=/app/static
+      - SESSION_MAX_AGE_HOURS
+      - ACCESS_ADMIN_TEAMS
+      - ACCESS_ORG_READER_TEAMS
+      - SYNC_STALE_AFTER_HOURS
+      - FORWARDED_ALLOW_IPS
+      - LOG_LEVEL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # Your own theme (docs/branding.md; or put this in a compose.override.yaml):
+    # volumes:
+    #   - ./theme:/app/static/theme:ro
+
+  worker:
+    <<: *app
+    command: ["copilot-metrics", "worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - GITHUB_ORG=${GITHUB_ORG:?set GITHUB_ORG in .env}
+      - GITHUB_APP_ID=${GITHUB_APP_ID:?set GITHUB_APP_ID in .env}
+      - GITHUB_APP_PRIVATE_KEY_PATH=/run/secrets/github_app_key
+      - WORKER_DATABASE_URL=postgresql://copilot_worker:${WORKER_DB_PASSWORD}@db:5432/copilot_metrics
+      - SYNC_CREDITS_CRON
+      - SYNC_SEATS_CRON
+      - SYNC_METRICS_CRON
+      - SYNC_BUDGETS_CRON
+      - SYNC_PRUNE_CRON
+      - SYNC_PARALLEL_REQUESTS
+      - SYNC_CATCH_UP_ON_START
+      - SYNC_HISTORY_RETENTION_DAYS
+      - SYNC_ALERT_AFTER_FAILURES
+      - LOG_LEVEL
+    healthcheck:
+      test: ["CMD", "copilot-metrics", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    secrets:
+      - github_app_key
+
+secrets:
+  github_app_key:
+    file: ${GITHUB_APP_PRIVATE_KEY_FILE:-./secrets/github-app.pem}
+
+volumes:
+  pgdata:

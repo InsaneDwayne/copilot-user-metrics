@@ -1,0 +1,24 @@
+{
+  "$schema": "./theme.schema.json",
+  "appName": "Copilot Usage",
+  "showAppName": true,
+  "logoUrl": null,
+  "logoUrlDark": null,
+  "faviconUrl": null,
+  "font": "Inter",
+  "fontStylesheetUrl": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+  "stylesheetUrl": "theme.css",
+  "defaultMode": "system",
+  "colors": {
+    "accent": "#9184d9",
+    "tokens": {},
+    "dark": {
+      "bg": "#161826",
+      "text": "#e9e9ed"
+    },
+    "light": {
+      "bg": "#f4f5fa",
+      "text": "#1b1d2a"
+    }
+  }
+}

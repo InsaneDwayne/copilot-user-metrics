@@ -1,0 +1,88 @@
+{
+  // Start each part on its own, or "Full stack" for API + worker + frontend.
+  // Configuration comes from the environment (.devcontainer/compose.yaml) and
+  // .devcontainer/.env (copy .devcontainer/.env.example). Run "Backend: Migrate DB" once first.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: API (FastAPI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["copilot_metrics.api:create_app", "--factory", "--reload", "--host", "127.0.0.1", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend: Sync worker (procrastinate)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "copilot_metrics.worker",
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend: Migrate DB (alembic upgrade head)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "copilot_metrics.cli",
+      "args": ["migrate"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend: Queue full backfill (re-fetch all history)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "copilot_metrics.cli",
+      "args": ["backfill"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend: Tests (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-v"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Frontend: Vite dev server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/frontend"
+    },
+    {
+      "name": "Frontend: Tests (vitest)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run test:watch",
+      "cwd": "${workspaceFolder}/frontend"
+    },
+    {
+      "name": "Frontend: Debug in Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack (API + worker + frontend)",
+      "configurations": ["Backend: API (FastAPI)", "Backend: Sync worker (procrastinate)", "Frontend: Vite dev server"],
+      "stopAll": true
+    }
+  ]
+}

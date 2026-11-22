@@ -1,0 +1,18 @@
+# Override: build the image from this checkout instead of pulling a release (for testing
+# unreleased changes). The image is tagged copilot-usage:local (or :$APP_VERSION if set):
+#
+#   docker compose -f deploy/compose.yaml -f deploy/compose.build.yaml up -d --build
+#
+# Not part of the release bundle. compose.worker-migrates.build.yaml is the same for
+# compose.worker-migrates.yaml.
+x-build: &build
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    target: app
+  image: copilot-usage:${APP_VERSION:-local}
+
+services:
+  migrate: *build
+  api: *build
+  worker: *build

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copilot Usage</title>
+    <script>
+      // Pick light or dark before the first paint, so the page doesn't flash while the
+      // theme loads. Same storage key as shared/theme/mode.ts, which takes over from here.
+      ;(function () {
+        var preference
+        try {
+          preference = localStorage.getItem('theme-mode')
+        } catch (e) {}
+        var dark =
+          preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

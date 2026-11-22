@@ -1,0 +1,56 @@
+# Known vulnerabilities in the locked dependencies:
+#   backend   pip-audit over backend/uv.lock (all groups, so the dev tooling too)
+#   frontend  npm audit over frontend/package-lock.json, failing at high severity or worse
+# Runs on every PR and push to main, and weekly, since a new advisory can hit lockfiles that
+# haven't changed. Kept out of ci.yml on purpose: a fresh advisory should block merging,
+# not a release of a build that already passed. Dependabot (.github/dependabot.yml) opens the fixes.
+name: Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9"
+
+      # The lockfile pins every package, so pip-audit checks exactly those versions
+      # (--no-deps) without installing or resolving anything (--disable-pip).
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          uv export --locked --all-groups --no-emit-project --no-hashes --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit@2.9.0 --requirement "$RUNNER_TEMP/requirements.txt" --no-deps --disable-pip --progress-spinner off
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      # Reads package-lock.json only; nothing is installed.
+      - name: npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high

@@ -1,0 +1,374 @@
+# Release, started either way (see docs/releasing.md):
+#   - Actions > Release > Run workflow on main, entering the version (e.g. 1.4.0): releases
+#     main's current commit; the release job creates the tag `v<version>`, or
+#   - push a tag `v<version>` (`just release <version>`): releases the tagged commit.
+# The version is only what's entered or tagged; backend/pyproject.toml's is a placeholder.
+#
+#   verify    the version is valid PEP 440 (X.Y.Z, optional aN | bN | rcN | .devN) and the
+#             commit is on main; button runs: on main, and the tag doesn't exist yet
+#   ci        the full CI workflow (tests + image build), reused via workflow_call
+#   screenshots  the documentation screenshots (docs/images/) match the UI being released:
+#             runs `just screenshots` in the dev container (.github/actions/screenshots) and
+#             fails if they differ. Then
+#             refresh them (screenshots.yml or `just screenshots`), merge them, and start the
+#             release again
+#   publish   builds the runtime image for linux/amd64 + linux/arm64 with the version baked in,
+#             pushes it to GHCR with SBOM + provenance, attests it, then smoke-tests it
+#   release   creates the GitHub Release (generated notes, image reference and digest, and the
+#             self-hosting bundle: deploy/ with APP_VERSION pinned), and the tag on button runs
+#
+# The image is the release artifact: ghcr.io/<owner>/<repo>:<version>. One image runs every
+# part of the app (`copilot-metrics api | worker | migrate | backfill`).
+name: Release
+run-name: Release ${{ inputs.version || github.ref_name }}
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.4.0 or 1.5.0rc1 (tagged as v<version>)"
+        required: true
+        type: string
+
+concurrency:
+  # One release at a time, however it was started. Not "release": group names are
+  # case-insensitive, and the reused CI workflow runs in "Release-<ref>".
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the version and tag
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$REF_TYPE" == tag ]]; then
+            version="${REF_NAME#v}"
+          else
+            # Run workflow button: release main as-is; the release job creates the tag.
+            if [[ "$REF_NAME" != main ]]; then
+              echo "::error::Run the Release workflow on main (it was started on $REF_NAME)."
+              exit 1
+            fi
+            version="$INPUT_VERSION"
+            version="${version#v}"  # accept "v1.4.0" too
+          fi
+          tag="v$version"
+
+          # PEP 440 subset: 1.4.0, 1.5.0a1, 1.5.0b2, 1.5.0rc1, 1.5.0.dev3; no leading zeros.
+          n='(0|[1-9][0-9]*)'
+          if [[ ! "$version" =~ ^$n\.$n\.$n((a|b|rc)$n|\.dev$n)?$ ]]; then
+            echo "::error::'$version' is not a release version. Use X.Y.Z, optionally followed by aN, bN, rcN or .devN (e.g. 1.4.0, 1.5.0rc1)."
+            exit 1
+          fi
+
+          if [[ "$REF_TYPE" != tag ]]; then
+            # --exit-code: 0 = tag exists, 2 = no such tag, anything else = couldn't check.
+            rc=0; git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null || rc=$?
+            if [[ $rc -eq 0 ]]; then
+              echo "::error::$tag already exists. Releases can't be overwritten; enter a new version."
+              exit 1
+            elif [[ $rc -ne 2 ]]; then
+              echo "::error::Could not check whether $tag exists (git ls-remote exit $rc)."
+              exit 1
+            fi
+          fi
+
+          if [[ "$version" =~ (a|b|rc|\.dev)[0-9]+$ ]]; then prerelease=true; else prerelease=false; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag from $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check the commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main. Release tags must point at a commit merged into main."
+            exit 1
+          fi
+
+  ci:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  screenshots:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Capture the screenshots
+        id: capture
+        uses: ./.github/actions/screenshots
+
+      - name: Stop if they are outdated
+        if: steps.capture.outputs.changed == 'true'
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Screenshots are outdated
+
+          The UI of this commit no longer matches \`docs/images/\` (the images that changed are listed above).
+
+          1. Refresh them: *Actions → Screenshots → Run workflow* pushes the new images to the
+             \`docs/screenshots\` branch; open a pull request from it. Or run \`just screenshots\`
+             in the dev container and commit \`docs/images/\`.
+          2. Merge the new images into \`main\`.
+          3. Start the release again (see docs/releasing.md#outdated-screenshots).
+
+          *Re-run* doesn't help: it releases the same commit, with the old screenshots.
+          EOF
+          echo "::error title=Screenshots are outdated::docs/images/ doesn't match the UI being released. Refresh them (Actions > Screenshots, or 'just screenshots' in the dev container), merge them into main, then start the release again. Re-running releases the same commit with the old screenshots."
+          exit 1
+
+  publish:
+    needs: [verify, ci, screenshots]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # sign the provenance attestation
+      attestations: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.build.outputs.digest }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Image name
+        id: image
+        # GHCR needs lowercase names; the repo owner has capitals.
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          # Labels on the image config, annotations on the manifest and the multi-arch index.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ steps.image.outputs.name }}
+          # 1.4.2 -> 1.4.2, 1.4, 1, latest. Pre-releases only get their exact version.
+          # No bare major tag while on 0.x (0.y releases may break each other).
+          # `value` because button runs have no git tag for metadata-action to read.
+          tags: |
+            type=pep440,pattern={{version}},value=${{ env.VERSION }}
+            type=pep440,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
+            type=pep440,pattern={{major}},value=${{ env.VERSION }},enable=${{ !startsWith(env.VERSION, '0.') }}
+          flavor: |
+            latest=${{ needs.verify.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=copilot-user-metrics
+            org.opencontainers.image.description=GitHub Copilot usage dashboard (API + SPA, sync worker, migrations)
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: app
+          platforms: linux/amd64,linux/arm64
+          # Reported by `copilot-metrics --version` (and checked by the smoke test below).
+          build-args: |
+            COPILOT_METRICS_VERSION=${{ env.VERSION }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: mode=max
+          sbom: true
+          # amd64 layers are shared with CI's `image` job; arm64 has its own cache.
+          cache-from: |
+            type=gha,scope=app
+            type=gha,scope=app-release
+          cache-to: type=gha,scope=app-release,mode=max
+
+      # GitHub only stores attestations for public repos (and private repos of organizations
+      # on paid plans); user-owned private repos get "Feature not available". The image still
+      # carries the BuildKit SBOM and provenance from the build step either way.
+      - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Smoke test the published image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # Run each platform by its own manifest digest from the multi-arch index. Running
+          # the index digest twice with different --platform fails on Docker's containerd image
+          # store ("cannot overwrite digest"). Attestation entries (unknown/unknown) are skipped.
+          index=$(docker buildx imagetools inspect --raw "$IMAGE@$DIGEST")
+          for platform in linux/amd64 linux/arm64; do
+            echo "::group::$platform"
+            digest=$(jq -r --arg os "${platform%/*}" --arg arch "${platform#*/}" \
+              '[.manifests[] | select(.platform.os == $os and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else empty end' \
+              <<<"$index")
+            if [[ -z "$digest" ]]; then
+              echo "::error::No single $platform manifest in $IMAGE@$DIGEST."
+              exit 1
+            fi
+            ci/smoke-test.sh "$IMAGE@$digest" "$platform" "$VERSION"
+            echo "::endgroup::"
+          done
+
+  release:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v7
+
+      # deploy/ without the build override, with APP_VERSION pinned to this release: all an
+      # on-prem host needs (no checkout). Verified with `docker compose config`.
+      - name: Build the deploy bundle
+        id: bundle
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          # Placeholders for the required settings, so `config` can render the stack.
+          POSTGRES_PASSWORD: check
+          OWNER_DB_PASSWORD: check
+          API_DB_PASSWORD: check
+          WORKER_DB_PASSWORD: check
+          GITHUB_ORG: check
+          GITHUB_APP_ID: "1"
+          GITHUB_APP_CLIENT_ID: check
+          GITHUB_APP_CLIENT_SECRET: check
+          SESSION_SECRET: check-placeholder-session-secret-0123456789
+          IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          name="copilot-user-metrics-deploy-$VERSION"
+          dir="bundle/$name"
+          mkdir -p "$dir/secrets"
+          cp deploy/compose.yaml deploy/compose.worker-migrates.yaml "$dir/"
+          cp -rp deploy/db "$dir/"
+          cp deploy/secrets/.gitignore "$dir/secrets/"
+          sed "s/^APP_VERSION=$/APP_VERSION=$VERSION/" deploy/.env.example > "$dir/.env.example"
+
+          for f in compose.yaml compose.worker-migrates.yaml; do
+            images=$(cd "$dir" && docker compose -f "$f" --env-file .env.example config --images | sort -u)
+            if ! grep -qx "$IMAGE:$VERSION" <<<"$images"; then
+              echo "::error::The bundle's $f doesn't run $IMAGE:$VERSION (it runs: $images)."
+              exit 1
+            fi
+          done
+
+          tar -C bundle -czf "bundle/$name.tar.gz" --owner=0 --group=0 "$name"
+          echo "file=bundle/$name.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          ATTESTED: ${{ !github.event.repository.private }}
+          BUNDLE: ${{ steps.bundle.outputs.file }}
+          BUNDLE_NAME: ${{ steps.bundle.outputs.name }}
+        run: |
+          cat > notes.md <<EOF
+          ## Self-hosting (Docker Compose)
+
+          Download **\`$BUNDLE_NAME.tar.gz\`** below. It has the compose stack (Postgres, migrations,
+          API + dashboard, sync worker) with \`APP_VERSION=$VERSION\` already set:
+
+          \`\`\`bash
+          tar -xzf $BUNDLE_NAME.tar.gz && cd $BUNDLE_NAME
+          cp .env.example .env                         # fill in GitHub App + generated secrets
+          cp <your-app-key>.pem secrets/github-app.pem
+          docker compose up -d    # the worker loads all history GitHub still has on first start
+          \`\`\`
+
+          **Upgrading** an existing stack: set \`APP_VERSION=$VERSION\` in its \`.env\`, then
+          \`docker compose pull && docker compose up -d\`. The \`migrate\` service applies new migrations
+          before the API and worker start.
+
+          ## Container image
+
+          \`\`\`
+          docker pull $IMAGE:$VERSION
+          \`\`\`
+
+          | | |
+          | --- | --- |
+          | Image | \`$IMAGE:$VERSION\` |
+          | Digest | \`$DIGEST\` |
+          | Platforms | \`linux/amd64\`, \`linux/arm64\` |
+
+          Pin by digest for reproducible deploys: \`$IMAGE@$DIGEST\`. One image runs everything:
+          \`copilot-metrics api | worker | migrate | backfill\` (the API also serves the dashboard).
+          EOF
+          if [[ "$ATTESTED" == true ]]; then
+            echo "Verify provenance: \`gh attestation verify oci://$IMAGE@$DIGEST --repo $GITHUB_REPOSITORY\`." >> notes.md
+          fi
+          flags=(--repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file notes.md --generate-notes)
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            flags+=(--verify-tag)
+          else
+            # Button run: create the tag on the commit that was tested and published, unless
+            # it appeared meanwhile on a different commit.
+            # matching-refs returns [] when nothing matches (no 404 to tell apart from real
+            # errors, which fail the step); it matches by prefix, so pick the exact ref.
+            object=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" \
+              --jq ".[] | select(.ref == \"refs/tags/$TAG\") | .object")
+            if [[ -n "$object" ]]; then
+              existing=$(jq -r .sha <<<"$object")
+              if [[ "$(jq -r .type <<<"$object")" == tag ]]; then  # annotated tag -> its commit
+                existing=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$existing" --jq .object.sha)
+              fi
+              if [[ "$existing" != "$GITHUB_SHA" ]]; then
+                echo "::error::$TAG was created on $existing while this run released $GITHUB_SHA."
+                exit 1
+              fi
+            fi
+            flags+=(--target "$GITHUB_SHA")
+          fi
+          if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease); else flags+=(--latest); fi
+          gh release create "$TAG" "$BUNDLE" "${flags[@]}"

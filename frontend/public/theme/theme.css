@@ -1,0 +1,46 @@
+/*
+ * Optional extra styles for the dashboard, loaded after theme.json (see `stylesheetUrl`).
+ * Paths in theme.json and here are relative to this folder. Edits apply on the next reload.
+ *
+ * Most branding needs only theme.json: an accent, a background and text colour per mode,
+ * and `colors.tokens` to restyle single roles. Use this file for what JSON can't express:
+ * self-hosted fonts, a token that should be a gradient or rgba(), or one-off tweaks.
+ *
+ * Every colour is a CSS variable, `--color-<token>`:
+ *   base   canvas, surface, fg, accent
+ *   ramps  accent-100 … accent-900, neutral-100 … neutral-900 (generated from the base;
+ *          100 is furthest from the background, 900 closest, in both modes)
+ *   roles  fg-soft, fg-muted, fg-subtle            text, strongest to faintest
+ *          line, line-strong, well                 edges and recessed fills
+ *          tint/on-tint, chip/on-chip              tags and avatars
+ *          notice/on-notice/notice-line            banners
+ *          warning, error                          status
+ *          meter, meter-track                      bars
+ *          series-1 … series-8                     model colours, in order
+ *          chart-line, chart-included, chart-billed, chart-projection,
+ *          chart-grid, chart-axis, chart-label, chart-cursor
+ *          heat-1 … heat-3                         heat-map cells, faint to strong
+ *                                                  (chart-billed also fills a budget meter at 90%+)
+ * Fonts: --font-sans, --font-mono. Radii: --radius-sm, --radius-md, --radius-lg, --radius-tag.
+ *
+ * A plain `:root` rule overrides both modes; `:root[data-theme='light']` or
+ * `:root[data-theme='dark']` overrides one.
+ */
+
+/* Examples:
+
+@font-face {
+  font-family: 'Corporate Sans';
+  src: url('fonts/corporate-sans.woff2') format('woff2');
+  font-weight: 400 700;
+}
+:root {
+  --font-sans: 'Corporate Sans', system-ui, sans-serif;
+  --radius-md: 4px;
+}
+:root[data-theme='light'] {
+  --color-series-1: #e4572e;
+  --color-series-2: #17bebb;
+}
+
+*/

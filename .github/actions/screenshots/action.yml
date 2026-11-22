@@ -1,0 +1,71 @@
+# Regenerates docs/images/ inside the dev container (devcontainer.json, with its database) and
+# reports whether they changed. Used by the release check and the Screenshots workflow. It's
+# literally `just screenshots` in the dev container, so the images are exactly what you get
+# locally. See tools/screenshots/README.md.
+#
+# The dev container image's layers are kept in the GitHub Actions cache (scope `devcontainer`),
+# so only what changed in .devcontainer/Dockerfile is rebuilt. No registry involved.
+#
+# The job must check out the repository first.
+name: Capture screenshots
+description: Run `just screenshots` in the dev container and report whether docs/images/ changed
+
+outputs:
+  changed:
+    description: "'true' if docs/images/ differs from the checked-out commit"
+    value: ${{ steps.diff.outputs.changed }}
+
+runs:
+  using: composite
+  steps:
+    # Docker's own builder can only use the GitHub Actions cache with the containerd image
+    # store. A separate buildx builder (docker-container) won't do: the dev container CLI's
+    # follow-up `docker build` (matching the container user's UID to the runner's) has to see
+    # the image compose just built in the local image store.
+    - name: Switch Docker to the containerd image store
+      shell: bash
+      run: |
+        f=/etc/docker/daemon.json
+        { sudo cat "$f" 2>/dev/null || echo '{}'; } | jq '.features["containerd-snapshotter"] = true' | sudo tee "$f.new" >/dev/null
+        sudo mv "$f.new" "$f"
+        sudo systemctl restart docker
+        docker info -f 'Storage driver: {{ .Driver }}'
+
+    # Fills the builder's cache with the dev container's layers from the GitHub Actions cache
+    # (and saves new ones there), so the dev container build below finds them all.
+    - name: Build the dev container image (cached)
+      uses: docker/build-push-action@v7
+      with:
+        context: .devcontainer
+        cache-from: type=gha,scope=devcontainer
+        cache-to: type=gha,scope=devcontainer,mode=max
+
+    # Builds and starts the dev container like VS Code does (post-create runs `just install`),
+    # with the workspace mounted, so the images land in this checkout.
+    - name: Capture in the dev container
+      uses: devcontainers/ci@v0.3
+      with:
+        push: never
+        runCmd: just screenshots
+
+    - name: Compare with the committed images
+      id: diff
+      shell: bash
+      run: |
+        changes=$(git status --porcelain -- docs/images)
+        if [[ -z "$changes" ]]; then
+          echo "Screenshots are up to date." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          { echo "Screenshots that changed:"; echo '```'; echo "$changes"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    # The new images, to look at from the run's page.
+    - name: Upload the new images
+      if: steps.diff.outputs.changed == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: screenshots
+        path: docs/images
+        retention-days: 7
