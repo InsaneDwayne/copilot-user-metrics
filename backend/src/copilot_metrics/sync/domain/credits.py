@@ -40,6 +40,11 @@ class ModelCredits(Frozen):
 UNKNOWN_MODEL = "Unknown model"
 
 
+def billed_usd(items: Iterable[CreditUsageItem]) -> Amount:
+    """What GitHub billed for AI credits beyond the included ones (the net amount)."""
+    return sum((i.net_amount for i in items), ZERO)
+
+
 def credits_by_model(items: Iterable[CreditUsageItem]) -> list[ModelCredits]:
     """GitHub may return several items per model (e.g. per SKU); store one row per model."""
     groups: defaultdict[str, list[CreditUsageItem]] = defaultdict(list)

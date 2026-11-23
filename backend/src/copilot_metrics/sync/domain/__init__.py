@@ -31,6 +31,7 @@ from copilot_metrics.sync.domain.credits import (
     CreditUsageItem,
     CreditUsageReport,
     ModelCredits,
+    billed_usd,
     credits_by_model,
 )
 from copilot_metrics.sync.domain.reports import ReportLinks, UserTeamRecord
@@ -73,6 +74,7 @@ __all__ = [
     "UsageSummaryItem",
     "UsageSummaryReport",
     "UserTeamRecord",
+    "billed_usd",
     "budget_for_user",
     "by_month",
     "credits_by_model",
