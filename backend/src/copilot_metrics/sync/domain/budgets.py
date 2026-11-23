@@ -1,13 +1,11 @@
 """GitHub budgets and the ones stored for the org and for each person."""
 
-from collections.abc import Iterable
 from datetime import datetime
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator
 
 from copilot_metrics.shared.kernel import ZERO, Amount, Frozen
-from copilot_metrics.sync.domain.credits import CreditUsageItem
 
 
 def _null_as(default: Any) -> BeforeValidator:
@@ -85,11 +83,6 @@ class BudgetRecord(Frozen):
             prevent_further_usage=b.prevent_further_usage,
             expires_at=b.expires_at,
         )
-
-
-def billed_usd(items: Iterable[CreditUsageItem]) -> Amount:
-    """What GitHub billed for AI credits beyond the included ones (the net amount)."""
-    return sum((i.net_amount for i in items), ZERO)
 
 
 def org_budgets(page: BudgetPage, org_billed_usd: Amount = ZERO) -> list[BudgetRecord]:

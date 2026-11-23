@@ -11,7 +11,6 @@ from copilot_metrics.sync.domain.budgets import (
     BudgetRecord,
     EffectiveBudget,
     GitHubBudget,
-    billed_usd,
     budget_for_user,
     org_budgets,
 )
@@ -32,6 +31,7 @@ from copilot_metrics.sync.domain.credits import (
     CreditUsageItem,
     CreditUsageReport,
     ModelCredits,
+    billed_usd,
     credits_by_model,
 )
 from copilot_metrics.sync.domain.reports import ReportLinks, UserTeamRecord
