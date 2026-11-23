@@ -11,6 +11,7 @@ from copilot_metrics.sync.domain.budgets import (
     BudgetRecord,
     EffectiveBudget,
     GitHubBudget,
+    billed_usd,
     budget_for_user,
     org_budgets,
 )
@@ -73,6 +74,7 @@ __all__ = [
     "UsageSummaryItem",
     "UsageSummaryReport",
     "UserTeamRecord",
+    "billed_usd",
     "budget_for_user",
     "by_month",
     "credits_by_model",

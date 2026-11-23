@@ -12,6 +12,7 @@ from copilot_metrics.sync.domain import (
     SeatHolder,
     SyncAction,
     SyncTarget,
+    billed_usd,
     budget_for_user,
     by_month,
     credits_by_model,
@@ -75,7 +76,9 @@ class SyncService:
 
         async def work() -> int:
             now = self._clock.now()
-            rows = await self._store.replace_org_budgets(org_budgets(await self._github.budgets()), now)
+            # The org's paid AI credit spend this month, which its organization budgets cap.
+            billed = billed_usd(await self._github.monthly_credit_usage(now.year, now.month))
+            rows = await self._store.replace_org_budgets(org_budgets(await self._github.budgets(), billed), now)
             for holder in await self._store.seat_holders_since(now.date()):
                 page = await self._github.budgets(user=holder.login)
                 rows += await self._store.save_user_budget(holder, budget_for_user(holder.login, page), now)

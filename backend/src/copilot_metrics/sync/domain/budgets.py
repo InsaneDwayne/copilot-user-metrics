@@ -1,11 +1,13 @@
 """GitHub budgets and the ones stored for the org and for each person."""
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator
 
 from copilot_metrics.shared.kernel import ZERO, Amount, Frozen
+from copilot_metrics.sync.domain.credits import CreditUsageItem
 
 
 def _null_as(default: Any) -> BeforeValidator:
@@ -28,14 +30,18 @@ class GitHubBudget(Frozen):
     budget_scope: str
     budget_entity_name: str | None = None
     user: str | None = None
-    consumed_amount: GitHubAmount = ZERO
+    # Optional in GitHub's schema, and in practice often left out of the org-wide list: None
+    # means "not reported", which must not be mistaken for "nothing spent".
+    consumed_amount: Amount | None = None
     budget_product_sku: str | None = None
     expires_at: datetime | None = None
 
     @property
     def is_copilot(self) -> bool:
+        # Budgets GitHub converted from premium requests to AI credits may still come back with
+        # the old ``premium_requests`` SKU, although the UI shows them as AI credit budgets.
         sku = (self.budget_product_sku or "").lower()
-        return "ai_credit" in sku or "copilot" in sku
+        return any(part in sku for part in ("ai_credit", "copilot", "premium_request"))
 
     def applies_only_to(self, login: str) -> bool:
         return self.budget_scope == "user" and (self.user or "").lower() == login.lower()
@@ -75,15 +81,31 @@ class BudgetRecord(Frozen):
             sku=b.budget_product_sku or "",
             budget_type=b.budget_type,
             amount_usd=b.budget_amount,
-            consumed_usd=b.consumed_amount if consumed_usd is None else consumed_usd,
+            consumed_usd=(b.consumed_amount or ZERO) if consumed_usd is None else consumed_usd,
             prevent_further_usage=b.prevent_further_usage,
             expires_at=b.expires_at,
         )
 
 
-def org_budgets(page: BudgetPage) -> list[BudgetRecord]:
-    """Copilot budgets that apply org-wide. Personal budgets are stored per person only."""
-    return [BudgetRecord.of(b) for b in page.budgets if b.is_copilot and b.budget_scope != "user"]
+def billed_usd(items: Iterable[CreditUsageItem]) -> Amount:
+    """What GitHub billed for AI credits beyond the included ones (the net amount)."""
+    return sum((i.net_amount for i in items), ZERO)
+
+
+def org_budgets(page: BudgetPage, org_billed_usd: Amount = ZERO) -> list[BudgetRecord]:
+    """Copilot budgets that apply org-wide. Personal budgets are stored per person only.
+
+    An organization budget caps the org's paid AI credit spend: everything billed beyond the
+    included credits this month, i.e. ``org_billed_usd``. GitHub's list call often leaves its
+    ``consumed_amount`` out (or reports 0), which left the org meter stuck at $0, so the org's
+    billed spend is the floor. Other scopes (enterprise, cost center, ...) cover spend outside
+    this org's own report, so for them only GitHub's figure is used.
+    """
+    return [
+        BudgetRecord.of(b, max(b.consumed_amount or ZERO, org_billed_usd) if b.budget_scope == "organization" else None)
+        for b in page.budgets
+        if b.is_copilot and b.budget_scope != "user"
+    ]
 
 
 def budget_for_user(login: str, page: BudgetPage) -> BudgetRecord | None:

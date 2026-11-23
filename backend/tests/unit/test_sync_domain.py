@@ -4,9 +4,11 @@ from typing import Any
 
 from copilot_metrics.sync.domain import (
     BudgetPage,
+    CreditUsageItem,
     CreditUsageReport,
     UsageSummaryReport,
     UserTeamRecord,
+    billed_usd,
     budget_for_user,
     credits_by_model,
     org_budgets,
@@ -92,6 +94,31 @@ def test_null_amounts_from_github_read_as_zero_instead_of_failing_the_sync() -> 
         {"budgets": [org], "effective_budget": {"id": "org", "budget_amount": 500, "consumed_amount": None}}
     )
     assert org_budgets(page)[0].consumed_usd == 0
+
+
+def test_org_budget_without_reported_consumption_uses_the_orgs_billed_spend() -> None:
+    org = {k: v for k, v in BUDGETS["budgets"][0].items() if k != "consumed_amount"}
+    cost_center = {**org, "id": "cc", "budget_scope": "cost_center"}
+    page = BudgetPage.model_validate({"budgets": [org, cost_center]})
+    assert [(r.id, r.consumed_usd) for r in org_budgets(page, Decimal("300.25"))] == [
+        ("org", Decimal("300.25")),
+        ("cc", Decimal(0)),  # spends outside this org's report: GitHub's figure only
+    ]
+
+
+def test_org_budget_keeps_githubs_figure_when_it_is_higher() -> None:
+    page = BudgetPage.model_validate(BUDGETS)
+    assert org_budgets(page, Decimal(100))[0].consumed_usd == Decimal("120.5")
+
+
+def test_budgets_still_reported_as_premium_requests_count_as_copilot() -> None:
+    legacy = {**BUDGETS["budgets"][0], "budget_product_sku": "premium_requests"}
+    assert [r.id for r in org_budgets(BudgetPage.model_validate({"budgets": [legacy]}))] == ["org"]
+
+
+def test_billed_usd_sums_the_net_amounts() -> None:
+    items = [CreditUsageItem.model_validate({"netAmount": n}) for n in (1.5, 2)]
+    assert billed_usd(items) == Decimal("3.5")
 
 
 def test_personal_budget_wins_over_the_org_budget() -> None:
