@@ -21,7 +21,7 @@ FROM frontend-deps AS frontend
 RUN npm run build
 
 # --- backend ------------------------------------------------------------------
-FROM python:3.14-slim AS backend-base
+FROM python:3.15-slim AS backend-base
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
